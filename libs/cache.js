@@ -1,4 +1,5 @@
-const cacheManager = require('cache-manager');
+const cacheManager = require('cache-manager')
+
 const utils = require('@midgar/utils')
 
 /**
@@ -8,78 +9,75 @@ const utils = require('@midgar/utils')
 class Cache {
   constructor(midgar) {
     this.midgar = midgar
+    this._stores = []
+    this.cacheManager = null
+    this._storeInstances = {}
   }
 
 /**
  * Init cache manager
  */
   async init() {
+    this._config = this.midgar.config.cache || {}
 
-    this.config = {
-      store: 'memory',
- //     ttl: 10,/*seconds*/
-    }
-
-    if (this.midgar.config.cache) 
-      Object.assign(this.config, this.midgar.config.cache)
-    
-    this._cache = await this._createCacheInstance(this.config.store)
-
-    await this.clean()
+    await this.createStoreInstance('default')
   }
 
-  async clean() {
-    this.midgar.warn('Clean cache')
-    const keys = await this._cache.keys()
+  /**
+   * 
+   */
+  async createStoreInstance(storeKey) {
+    if (!this._config[storeKey] || !this._config[storeKey].store) {
+      throw new Error('No store defined for ' + storeKey + ' cache.')
+    }
+    const store = this._config[storeKey].store
+    const config = await this._getCreateStoreConfig(storeKey, store)
+    this._storeInstances[storeKey] = cacheManager.caching(config);
+
+    return this._storeInstances[storeKey]
+  }
+
+  getStoreInstance(storeKey = 'default') {
+    return this._storeInstances[storeKey]
+  }
+
+  existStoreInstance(storeKey) {
+    return this._storeInstances[storeKey] != undefined
+  }
+
+  /**
+   * Return the session storage
+   */
+  async _getCreateStoreConfig(storeKey, store) {
+    const storeCallback = await this.getStore(store)
+    return await storeCallback(storeKey)
+  }
+
+  /**
+   * Clean cache store
+   * 
+   * @param {*} storeKey 
+   */
+  async clean(storeKey) {
+    const keys = await this.getStoreInstance(storeKey).keys()
     await utils.asyncMap(keys, async key => {
-      await this.del(key)
+      await this.del(key, storeKey)
     })
   }
 
   /**
-   * 
-   * @param {*} store 
+   * Clean all cache store
    */
-  async _createCacheInstance(store) {
-    if (store == 'redis') {
-      return this._createRedisCache()
-    } else if (store == 'memory') {
-      return cacheManager.caching({store: 'memory', max: 100, ttl: this.config.ttl});
-    }
-  }
-
-  /**
-   * 
-   */
-  _createRedisCache() {
-
-    if (!this.config.host)
-      throw new Error ('No host in cache config')
-
-    const redisStore = require('cache-manager-redis-store');
-    const opts = {
-      store: redisStore,
-      host: this.config.host, // default value
-      ttl: this.config.ttl
-    }
-
-    if (this.config.port)
-      opts.port = this.config.port
-
-    if (this.config.auth_pass)
-      opts.auth_pass = this.config.auth_pass
-
-    if (this.config.db) 
-      opts.db = this.config.db
-    else 
-      opts.db = 0
-      
-    return cacheManager.caching(opts);
+  async cleanAll() {
+    const keys = Object.keys(this._storeInstances)
+    keys.forEach(storeKey => {
+      this.clean(storeKey)
+    })
   }
 
   set(key, value, opts = {}) {
     return new Promise((accept, reject) => {
-      this._cache.set(key, value, opts, (err) => {
+      this.getStoreInstance().set(key, value, opts, (err) => {
         if (err) {
           reject(err)
         }
@@ -90,7 +88,7 @@ class Cache {
 
   get(key) {
     return new Promise((accept, reject) => {
-      this._cache.get(key, (err, result) => {
+      this.getStoreInstance().get(key, (err, result) => {
         if (err) {
           reject(err)
         }
@@ -99,15 +97,35 @@ class Cache {
     })
   }
 
-  del(key) {
+  del(key, storeKey) {
     return new Promise((accept, reject) => {
-      this._cache.del(key, (err) => {
+      this.getStoreInstance(storeKey).del(key, (err) => {
         if (err) {
           reject(err)
         }
         accept()
       })
     })
+  }
+
+  /**
+   * add a cache storage callback
+   * @param {string} name storage name
+   */
+  async addStore(name, callback) {
+    this._stores[name] = callback
+  }
+
+  /**
+   * return a return storage callback
+   * @param {string} name storage name
+   */
+  async getStore(name) {
+    if (this._stores[name] !== undefined) {
+      return this._stores[name]
+    }
+
+    throw new Error ('Invalid cache store name: ' + name)
   }
 }
 
