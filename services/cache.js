@@ -1,5 +1,4 @@
 const cacheManager = require('cache-manager')
-
 const utils = require('@midgar/utils')
 
 /**
@@ -20,7 +19,11 @@ class Cache {
   async init() {
     this._config = this.midgar.config.cache || {}
 
+    await this.midgar.pm.emit('@midgar/cache:beforeInit', { cacheService: this })
+
     await this.createStoreInstance('default')
+
+    await this.midgar.pm.emit('@midgar/cache:afterInit', { cacheService: this })
   }
 
   /**
@@ -129,5 +132,6 @@ class Cache {
   }
 }
 
-
-module.exports = Cache
+module.exports = {
+  service: Cache
+}

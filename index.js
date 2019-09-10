@@ -1,6 +1,4 @@
-
 const Plugin = require('@midgar/midgar/plugin')
-const Cache = require('./libs/cache')
 
 /**
  * MidgarCache plugin
@@ -9,28 +7,17 @@ const Cache = require('./libs/cache')
  * @see 
  */
 class MidgarCache extends Plugin {
-
   async init() {
-    this._cache = new Cache(this.midgar)
-
-    this.pm.on('afterMidgarInit', () => {
-      return this._afterMidgarInit()
+    this.pm.on('@midgar/services:afterInit', async () => {
+      return this._afterServicesInit()
     })
   }
 
   /**
    * Init cache manager and cli
    */
-  async _afterMidgarInit() {
-    // Emit beforeInit event
-    await this.midgar.pm.emit('@midgar/cache:beforeInit', { cache: this._cache })
-
-    await this._cache.init()
-    this.midgar.services.cache = this._cache
-    
-    await this.midgar.pm.emit('@midgar/cache:afterInit')
-
-    if (this.midgar.services.cli) {
+  async _afterServicesInit() {
+    if (this.midgar.cli) {
       await this._initCli()
     }
   }
@@ -39,8 +26,9 @@ class MidgarCache extends Plugin {
    * Create cli
    */
   async _initCli() {
+    const cacheService = await this.midgar.getService('@midgar/cache:cache')
     const CacheCli = require('./libs/cli')
-    this._cli = new CacheCli(this.midgar)
+    this.cli = new CacheCli(this.midgar, cacheService)
   }
 }
 

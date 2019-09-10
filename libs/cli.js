@@ -10,35 +10,37 @@ const utils = require('@midgar/utils')
  *  - cache:cleanAll
  */
 class CacheCli {
-  constructor (midgar) {
+  constructor (midgar, cacheService) {
     this.midgar = midgar
     
-    if (!this.midgar.services.cli) {
-      throw new Error('The cli service is not register')
+    if (!this.midgar.cli) {
+      throw new Error('The cli is not register')
     }
 
-    this._cache = this.midgar.services.cache
-    this._cli = this.midgar.services.cli
+    this.cacheService = cacheService
+    this.cli = this.midgar.cli
 
-    //add cli commands
+    // Add cli commands
     this._addCommands()
   }
 
+  /**
+   * Add the cli commands to yargs
+   */
   _addCommands() {
-
-    this._cli.command('cache:clean [storeKey]', 'Clean cache store', {}, async (argv) => {
+    this.cli.command('cache:clean [storeKey]', 'Clean cache store', {}, async (argv) => {
       if (!argv.storeKey) {
         console.log('No cache store given !')
-      } else if (!this._cache.existStoreInstance(argv.storeKey)) {
+      } else if (!this.cacheService.existStoreInstance(argv.storeKey)) {
         console.log('Invalid cache store !')
       } else {
-        await this._cache.clean(argv.storeKey)
+        await this.cacheService.clean(argv.storeKey)
       }
       process.exit(0)
     })
 
-    this._cli.command('cache:cleanAll', 'Clean all cache instance', {}, async (argv) => {
-      await this._cache.cleanAll()
+    this.cli.command('cache:cleanAll', 'Clean all cache instance', {}, async (argv) => {
+      await this.cacheService.cleanAll()
       process.exit(0)
     })
 
